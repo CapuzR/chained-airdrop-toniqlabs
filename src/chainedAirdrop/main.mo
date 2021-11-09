@@ -203,7 +203,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   };
   public shared(msg) func mintNFT(request : MintRequest) : async TokenIndex {
     assert(msg.caller == _minter);
-    _mintNFT(request)l
+    _mintNFT(request);
   };
   
   public shared(msg) func transfer(request: TransferRequest) : async TransferResponse {
@@ -239,7 +239,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 				_registry.put(token, receiver);
         //ALERT: Airdrop definition.
         if(_supply < _airdropSupply) {
-          let airdropStatus = await airdrop([spender, receiver]);
+          let airdropStatus = airdrop([spender, receiver]);
         };
         //end
 				return #ok(request.amount);
