@@ -104,16 +104,16 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 	};
 
   //ALERT: Special Airdrop Code.
-  private func airdrop (aIds : [AccountIdentifier]) : async Result.Result<(), Error> {
+  private func airdrop (aIds : [AccountIdentifier]) : Result.Result<(), Error> {
       let cOwner : AccountIdentifier = AID.fromPrincipal(_minter, null);
       for(aId : AccountIdentifier in aIds.vals()) {
         Debug.print(debug_show(aId));
         Debug.print(debug_show(cOwner));
         Debug.print(debug_show(aId != cOwner));
         if(aId != cOwner) {
-          let p = await addPoints(aId);
+          let p = addPoints(aId);
               if( p.points == 3 ) {
-                let newToken : TokenIndex = await mintNFT({ to = #address(p.aId); metadata = null; });
+                let newToken : TokenIndex = _mintNFT({ to = #address(p.aId); metadata = null; });
                 let newP : Participant = {  aId : AccountIdentifier = p.aId; points : Points = 0; tokens : [TokenIndex] = Array.append(p.tokens, [newToken]); };
                 participants := Trie.replace(
                     participants,
@@ -128,7 +128,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
         return #ok(());
   };
 // async Result.Result<Participant, Error>
-  private func addPoints(aId : AccountIdentifier) : async Participant {
+  private func addPoints(aId : AccountIdentifier) : Participant {
         let result = Trie.find(
             participants,
             key(aId),
@@ -189,22 +189,22 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
       Principal.toText(Principal_.fromBlob(Blob.fromArray(rawTokenId)));
   };
 //end Test only utilities
-	
-  public shared(msg) func mintNFT(request : MintRequest) : async TokenIndex {
-    //ALERT: Changed to allow canister to mint NFT.
-		assert(msg.caller == _minter or msg.caller == Principal.fromActor(this));
-    //end
+  private func _mintNFT(request : MintRequest) : TokenIndex {
     let receiver = ExtCore.User.toAID(request.to);
-		let token = _nextTokenId;
-		let md : Metadata = #nonfungible({
-			metadata = request.metadata;
-		}); 
-		_registry.put(token, receiver);
-		_tokenMetadata.put(token, md);
-		_supply := _supply + 1;
-		_nextTokenId := _nextTokenId + 1;
+    let token = _nextTokenId;
+    let md : Metadata = #nonfungible({
+	metadata = request.metadata;
+    }); 
+    _registry.put(token, receiver);
+    _tokenMetadata.put(token, md);
+    _supply := _supply + 1;
+    _nextTokenId := _nextTokenId + 1;
     token;
-	};
+  };
+  public shared(msg) func mintNFT(request : MintRequest) : async TokenIndex {
+    assert(msg.caller == _minter);
+    _mintNFT(request)l
+  };
   
   public shared(msg) func transfer(request: TransferRequest) : async TransferResponse {
     if (request.amount != 1) {
