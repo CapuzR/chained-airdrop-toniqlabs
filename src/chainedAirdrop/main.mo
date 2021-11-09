@@ -145,7 +145,6 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
             );
             participants := newParticipant;
             return participant;
-            // #ok(participant);
           };
           case (?r) {
             let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = r.points + 1; tokens : [TokenIndex] = r.tokens };
@@ -156,7 +155,6 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
                 ?participant
             ).0;
             return participant;
-            // #ok(participant);
           };
         };
   };
@@ -164,6 +162,11 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   private func key(x : AccountIdentifier) : Trie.Key<AccountIdentifier> {
       return { key = x; hash = AID.hash(x) }
   };
+  
+	public shared(msg) func setAirdropSupply(airdropSupply : Balance) : async () {
+		assert(msg.caller == _minter);
+		_airdropSupply := airdropSupply;
+	};
   //end Special Airdrop Code.
 
 //Test only utilities
@@ -171,11 +174,6 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
     let tokenId : Text = await encode(Principal.fromActor(this), tokenIndex);
     return tokenId;
   };
-
-	public shared(msg) func setAirdropSupply(airdropSupply : Balance) : async () {
-		assert(msg.caller == _minter);
-		_airdropSupply := airdropSupply;
-	};
 
   public func getParticipants() : async Trie.Trie<AccountIdentifier, Participant> {
     return participants;
