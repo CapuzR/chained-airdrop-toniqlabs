@@ -34,7 +34,7 @@ initCanisterIds();
 const isDevelopment = process.env.NODE_ENV !== "production";
 const asset_entry = path.join(
   "src",
-  "shatteredAirdrop_assets",
+  "chainedAirdrop_assets",
   "src",
   "index.html"
 );
@@ -64,7 +64,7 @@ module.exports = {
   },
   output: {
     filename: "index.js",
-    path: path.join(__dirname, "dist", "shatteredAirdrop_assets"),
+    path: path.join(__dirname, "dist", "chainedAirdrop_assets"),
   },
 
   // Depending in the language or framework you are using for
@@ -86,14 +86,14 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         {
-          from: path.join(__dirname, "src", "shatteredAirdrop_assets", "assets"),
-          to: path.join(__dirname, "dist", "shatteredAirdrop_assets"),
+          from: path.join(__dirname, "src", "chainedAirdrop_assets", "assets"),
+          to: path.join(__dirname, "dist", "chainedAirdrop_assets"),
         },
       ],
     }),
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
-      SHATTEREDAIRDROP_CANISTER_ID: canisters["shatteredAirdrop"]
+      CHAINEDAIRDROP_CANISTER_ID: canisters["chainedAirdrop"]
     }),
     new webpack.ProvidePlugin({
       Buffer: [require.resolve("buffer/"), "Buffer"],
@@ -112,7 +112,7 @@ module.exports = {
       },
     },
     hot: true,
-    contentBase: path.resolve(__dirname, "./src/shatteredAirdrop_assets"),
+    contentBase: path.resolve(__dirname, "./src/chainedAirdrop_assets"),
     watchContentBase: true
   },
 };

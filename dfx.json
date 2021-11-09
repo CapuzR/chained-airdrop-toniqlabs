@@ -1,21 +1,8 @@
 {
   "canisters": {
-    "shatteredAirdrop": {
-      "main": "src/shatteredAirdrop/main.mo",
+    "chainedAirdrop": {
+      "main": "src/chainedAirdrop/main.mo",
       "type": "motoko"
-    },
-    "shatteredAirdrop_assets": {
-      "dependencies": [
-        "shatteredAirdrop"
-      ],
-      "frontend": {
-        "entrypoint": "src/shatteredAirdrop_assets/src/index.html"
-      },
-      "source": [
-        "src/shatteredAirdrop_assets/assets",
-        "dist/shatteredAirdrop_assets/"
-      ],
-      "type": "assets"
     }
   },
   "defaults": {
