@@ -26,6 +26,8 @@ import Binary "./util/Binary";
 import Principal_ "./util/Principal";
 import Trie "mo:base/Trie";
 import Text "mo:base/Text";
+import Time "mo:base/Time";
+import Buffer "mo:base/Buffer";
 
 shared (install) actor class erc721_token(init_minter: Principal) = this {
   
@@ -56,9 +58,10 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   type Error = {
       #DoesNotApply;
   };
-  public type Participant = { 
+  public type Participant = {
       aId : AccountIdentifier; 
       points: Nat; 
+      freezedUntil: Int;
       tokens: [TokenIndex];
   };
   //end Airdrop Types
@@ -79,12 +82,13 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   private stable var _minter : Principal  = init_minter;
   private stable var _nextTokenId : TokenIndex  = 0;
 
+  //Chained Airdrop States
+  private stable var _minterAId : AccountIdentifier = AID.fromPrincipal(_minter, null);
+  private stable var _a3capasAId : AccountIdentifier = AID.fromText("mh5zo-bbknh-tinss-4lvk4-fgz4v-wbs5h-ltia4-oy2mo-oujxu-keuct-wae", null);
 
-  //ALERT: Airdrop States
-  stable var participants : Trie.Trie<AccountIdentifier, Participant> = Trie.empty();
-  private stable var _airdropSupply : Balance  = 14;
-
-  
+  stable var _participants : Trie.Trie<AccountIdentifier, Participant> = Trie.empty();
+  private stable var _airdropSupply : Balance  = 20;
+  private stable var _maxPoints : Balance  = 5;
 
   //State functions
   system func preupgrade() {
@@ -103,60 +107,80 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 		_minter := minter;
 	};
 
-  //ALERT: Special Airdrop Code.
+  //Chained Airdrop Code
   private func airdrop (aIds : [AccountIdentifier]) : Result.Result<(), Error> {
-      let cOwner : AccountIdentifier = AID.fromPrincipal(_minter, null);
-      for(aId : AccountIdentifier in aIds.vals()) {
-        Debug.print(debug_show(aId));
-        Debug.print(debug_show(cOwner));
-        Debug.print(debug_show(aId != cOwner));
-        if(aId != cOwner) {
-          let p = addPoints(aId);
-              if( p.points == 3 ) {
-                let newToken : TokenIndex = _mintNFT({ to = #address(p.aId); metadata = null; });
-                let newP : Participant = {  aId : AccountIdentifier = p.aId; points : Points = 0; tokens : [TokenIndex] = Array.append(p.tokens, [newToken]); };
-                participants := Trie.replace(
-                    participants,
-                    key(p.aId),
-                    Text.equal,
-                    ?newP
-                ).0;
-              };
+      let participant : Buffer.Buffer<Participant> = Buffer.Buffer(2);
+      if (aIds[0] != _minterAId and aIds[0] != _a3capasAId) {
+        participant.add(addPoints(aIds[0], "sender"));
+      };
+      participant.add(addPoints(aIds[1], "receiver"));
+      for(p : Participant in participant.vals()) {
+        if(p.aId != _minterAId and p.aId != _a3capasAId) {
+          if( p.points == _maxPoints ) {
+            let newToken : TokenIndex = _mintNFT({ to = #address(p.aId); metadata = null; });
+            let newP : Participant = {  aId : AccountIdentifier = p.aId; points : Points = 0; tokens : [TokenIndex] = Array.append(p.tokens, [newToken]); freezedUntil = p.freezedUntil; };
+            _participants := Trie.replace(
+                _participants,
+                key(p.aId),
+                Text.equal,
+                ?newP
+            ).0;
+          };
         };
       };
         
         return #ok(());
   };
-// async Result.Result<Participant, Error>
-  private func addPoints(aId : AccountIdentifier) : Participant {
-        let result = Trie.find(
-            participants,
+
+  private func addPoints(aId : AccountIdentifier, userType : Text) : Participant {
+    var freezedUntil : Int = 0;
+    let freezeTime : Int = 60000000000;
+    // (24*60*60*1000000000);
+    let result = Trie.find(
+        _participants,
+        key(aId),
+        AID.equal
+    );
+
+    switch (result) {
+      case (null) {
+        if(userType == "receiver") {
+          freezedUntil := Time.now() + freezeTime;
+        };
+        let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = 1; tokens : [TokenIndex] = []; freezedUntil = freezedUntil; };
+        let (newParticipant, existing) = Trie.put(
+            _participants,
             key(aId),
-            AID.equal
+            AID.equal,
+            participant
         );
-        switch (result) {
-          case (null) {
-            let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = 1; tokens : [TokenIndex] = [] };
-            let (newParticipant, existing) = Trie.put(
-                participants,
-                key(aId),
-                AID.equal,
-                participant
-            );
-            participants := newParticipant;
-            return participant;
+        _participants := newParticipant;
+        return participant;
+      };
+      case (?r) {
+
+        if(userType == "receiver") {
+          if (r.freezedUntil <= Time.now()) {
+            freezedUntil := Time.now() + freezeTime;
+          } else {
+            freezedUntil := r.freezedUntil + freezeTime;
           };
-          case (?r) {
-            let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = r.points + 1; tokens : [TokenIndex] = r.tokens };
-            participants := Trie.replace(
-                participants,
-                key(aId),
-                Text.equal,
-                ?participant
-            ).0;
-            return participant;
+        } else {
+          if (r.freezedUntil <= Time.now()) {
+            freezedUntil := 0;
           };
         };
+
+        let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = r.points + 1; tokens : [TokenIndex] = r.tokens; freezedUntil = freezedUntil; };
+        _participants := Trie.replace(
+            _participants,
+            key(aId),
+            Text.equal,
+            ?participant
+        ).0;
+        return participant;
+      };
+    };
   };
 
   private func key(x : AccountIdentifier) : Trie.Key<AccountIdentifier> {
@@ -167,7 +191,35 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 		assert(msg.caller == _minter);
 		_airdropSupply := airdropSupply;
 	};
-  //end Special Airdrop Code.
+
+	public shared(msg) func setMaxPoints(maxPoints : Nat) : async () {
+		assert(msg.caller == _minter);
+		_maxPoints := maxPoints;
+	};
+
+  private func isFreezed(aId : AccountIdentifier) : Bool {
+    let result = Trie.find(
+        _participants,
+        key(aId),
+        AID.equal
+    );
+
+    switch (result) {
+      case (null) {
+        false;
+      };
+      case (?r) {
+
+        if(r.freezedUntil <= Time.now()) {
+          false;
+        } else {
+          true;
+        };
+      };
+    };
+  };
+
+  //end
 
 //Test only utilities
   public shared(msg) func getTokenId(tokenIndex : TokenIndex) : async Text {
@@ -176,7 +228,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   };
 
   public func getParticipants() : async Trie.Trie<AccountIdentifier, Participant> {
-    return participants;
+    return _participants;
   };
 
   public func encode(canisterId : Principal, tokenIndex : TokenIndex) : async Text {
@@ -188,7 +240,8 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
       ]);
       Principal.toText(Principal_.fromBlob(Blob.fromArray(rawTokenId)));
   };
-//end Test only utilities
+//end
+
   private func _mintNFT(request : MintRequest) : TokenIndex {
     let receiver = ExtCore.User.toAID(request.to);
     let token = _nextTokenId;
@@ -207,16 +260,23 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   };
   
   public shared(msg) func transfer(request: TransferRequest) : async TransferResponse {
-    if (request.amount != 1) {
+    if ( request.amount != 1 ) {
 			return #err(#Other("Must use amount of 1"));
 		};
-		if (ExtCore.TokenIdentifier.isPrincipal(request.token, Principal.fromActor(this)) == false) {
+		if ( ExtCore.TokenIdentifier.isPrincipal(request.token, Principal.fromActor(this)) == false ) {
 			return #err(#InvalidToken(request.token));
 		};
+
 		let token = ExtCore.TokenIdentifier.getIndex(request.token);
     let owner = ExtCore.User.toAID(request.from);
     let spender = AID.fromPrincipal(msg.caller, request.subaccount);
     let receiver = ExtCore.User.toAID(request.to);
+
+    //Chained Airdrop code
+    if( isFreezed(owner) ) { 
+			return #err(#Other("Your token is freeze. Wait the established freeze time."));
+    };
+    //end
 		
     switch (_registry.get(token)) {
       case (?token_owner) {
@@ -237,7 +297,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 				};
 				_allowances.delete(token);
 				_registry.put(token, receiver);
-        //ALERT: Airdrop definition.
+        //Chained Airdrop code
         if(_supply < _airdropSupply) {
           let airdropStatus = airdrop([spender, receiver]);
         };
