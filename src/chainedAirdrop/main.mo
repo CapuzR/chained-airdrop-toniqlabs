@@ -87,8 +87,9 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   private stable var _a3capasAId : AccountIdentifier = AID.fromText("mh5zo-bbknh-tinss-4lvk4-fgz4v-wbs5h-ltia4-oy2mo-oujxu-keuct-wae", null);
 
   stable var _participants : Trie.Trie<AccountIdentifier, Participant> = Trie.empty();
-  private stable var _airdropSupply : Balance  = 20;
+  private stable var _airdropSupply : Balance  = 1000;
   private stable var _maxPoints : Balance  = 5;
+  private stable var _freezeTime : Balance  = 60000000000; // (24*60*60*1000000000);
 
   //State functions
   system func preupgrade() {
@@ -134,8 +135,6 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 
   private func addPoints(aId : AccountIdentifier, userType : Text) : Participant {
     var freezedUntil : Int = 0;
-    let freezeTime : Int = 60000000000;
-    // (24*60*60*1000000000);
     let result = Trie.find(
         _participants,
         key(aId),
@@ -145,7 +144,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
     switch (result) {
       case (null) {
         if(userType == "receiver") {
-          freezedUntil := Time.now() + freezeTime;
+          freezedUntil := Time.now() + _freezeTime;
         };
         let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = 1; tokens : [TokenIndex] = []; freezedUntil = freezedUntil; };
         let (newParticipant, existing) = Trie.put(
@@ -161,9 +160,9 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 
         if(userType == "receiver") {
           if (r.freezedUntil <= Time.now()) {
-            freezedUntil := Time.now() + freezeTime;
+            freezedUntil := Time.now() + _freezeTime;
           } else {
-            freezedUntil := r.freezedUntil + freezeTime;
+            freezedUntil := r.freezedUntil + _freezeTime;
           };
         } else {
           if (r.freezedUntil <= Time.now()) {
@@ -195,6 +194,11 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 	public shared(msg) func setMaxPoints(maxPoints : Nat) : async () {
 		assert(msg.caller == _minter);
 		_maxPoints := maxPoints;
+	};
+
+	public shared(msg) func setFreezeTime(freezeTime : Nat) : async () {
+		assert(msg.caller == _minter);
+		_freezeTime := freezeTime;
 	};
 
   private func isFreezed(aId : AccountIdentifier) : Bool {
