@@ -112,9 +112,11 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
   private func airdrop (aIds : [AccountIdentifier]) : Result.Result<(), Error> {
       let participant : Buffer.Buffer<Participant> = Buffer.Buffer(2);
       if (aIds[0] != _minterAId and aIds[0] != _a3capasAId) {
-        participant.add(addPoints(aIds[0], "sender"));
+        participant.add(addPoints(aIds[0], "sender", false));
+        participant.add(addPoints(aIds[1], "receiver", false));
+      } else {
+        participant.add(addPoints(aIds[1], "receiver", true));
       };
-      participant.add(addPoints(aIds[1], "receiver"));
       for(p : Participant in participant.vals()) {
         if(p.aId != _minterAId and p.aId != _a3capasAId) {
           if( p.points == _maxPoints ) {
@@ -133,7 +135,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
         return #ok(());
   };
 
-  private func addPoints(aId : AccountIdentifier, userType : Text) : Participant {
+  private func addPoints(aId : AccountIdentifier, userType : Text, initial: Bool) : Participant {
     var freezedUntil : Int = 0;
     let result = Trie.find(
         _participants,
@@ -143,7 +145,7 @@ shared (install) actor class erc721_token(init_minter: Principal) = this {
 
     switch (result) {
       case (null) {
-        if(userType == "receiver") {
+        if(userType == "receiver" and not initial) {
           freezedUntil := Time.now() + _freezeTime;
         };
         let participant : Participant = {  aId : AccountIdentifier = aId; points : Points = 1; tokens : [TokenIndex] = []; freezedUntil = freezedUntil; };
